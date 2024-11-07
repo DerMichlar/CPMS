@@ -1,0 +1,729 @@
+\documentclass[12pt, ngerman]{report}
+\renewcommand{\familydefault}{\sfdefault}
+\usepackage[utf8x]{inputenc}
+%\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{marvosym}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{listing}
+\usepackage{siunitx}
+\usepackage[ngerman]{datetime}
+\usepackage[version=4]{mhchem}
+
+\pagestyle{empty}
+
+\usepackage[scale=0.84]{geometry}
+\setlength{\parindent}{0pt}
+\addtolength{\parskip}{6pt}
+
+\def\firstname{Alexander Michael}
+\def\familyname{Minke}
+\def\FileAuthor{\firstname \familyname}
+\def\FileTitle{\firstname \familyname's cover letter}
+\def\FileSubject{Cover letter}
+\def\FileKeyWords{\firstname \familyname, Cover letter}
+
+\renewcommand{\ttdefault}{pcr}
+
+
+
+%\renewcommand*{\namefont}{\Huge\mdseries\upshape}
+%\renewcommand*{\titlefont}{\huge\mdseries\upshape}
+%\renewcommand*{\addressfont}{\small\mdseries}
+
+\begin{document}
+	
+\chapter{Molecular Dynamics Simulation in the Microcanonical Ensemble - \texttt{main.py}}
+\label{chap:md_simulation}
+
+This documentation provides an overview of the molecular dynamics (MD) simulation code for a microcanonical ensemble (constant energy, volume, and particle number). The simulation uses a Lennard-Jones (LJ) potential to model atomic interactions, and the equations of motion are integrated with the Velocity Verlet algorithm. 
+
+\section{Simulation Overview}
+The simulation runs in two phases:
+\begin{enumerate}
+	\item \textbf{Equilibration Phase:} Positions and velocities are initialized, and the system is equilibrated at the target temperature.
+	\item \textbf{Production Phase:} After equilibration, the system state is recorded to trajectory files and energy output files for further analysis.
+\end{enumerate}
+
+\section{Potential and Force Field}
+The interaction between particles is governed by the Lennard-Jones (LJ) potential:
+\begin{itemize}
+	\item \texttt{eps} --- Scales with temperature using \texttt{eps = alpha * kb * T}.
+	\item \texttt{r0} --- Set to 15 angstroms, determines the equilibrium separation.
+\end{itemize}
+Note that the potential is not smoothed at the cutoff distance, potentially leading to discontinuities in forces.
+
+\section{Code Structure}
+
+\subsection{Library Imports and Working Directory Setup}
+The simulation environment is set up by importing required modules.
+
+\begin{verbatim}
+	import settings, initialize, force, update, debug, misc
+\end{verbatim}
+
+\subsection{Initialization and Setup}
+The code begins by initializing global variables and setting up the simulation environment. Specifically:
+\begin{itemize}
+	\item \texttt{settings.init()} --- Initializes simulation parameters.
+	\item \texttt{initialize.InitializeAtoms()} --- Sets up atomic positions and velocities, cancels any net linear momentum, and rescales velocities to match the desired temperature.
+	\item \texttt{force.forceLJvec()} --- Computes initial forces on particles based on the LJ potential.
+\end{itemize}
+
+Output files are created for recording trajectory and energy during the equilibration run of the simulation :
+\begin{verbatim}
+	fileoutput = open("output_equilibration.txt", "w")
+	fileenergy = open("energy_equilibration.txt", "w")
+\end{verbatim}
+
+\section{Equilibration Phase}
+The code equilibrates the system over a specified number of steps (\texttt{settings.nsteps}). During equilibration:
+\begin{itemize}
+	\item \texttt{update.VelocityVerletVec()} --- Updates positions and velocities using the Velocity Verlet algorithm.
+	\item \texttt{update.KineticEneryVec()} --- Calculates the kinetic energy.
+\end{itemize}
+
+Data is saved periodically:
+\begin{itemize}
+	\item Every 10 steps: Energy is recorded using \texttt{misc.WriteEnergy()}.
+	\item Every 500 steps: Particle positions are recorded using \texttt{misc.WriteTrajectory()}.
+\end{itemize}
+
+If temperature rescaling is enabled, velocities are rescaled to maintain the desired temperature every 20 steps.
+
+\section{Production Phase}
+After equilibration, a production run is conducted over the next set of \texttt{nsteps}:
+\begin{verbatim}
+	for step in range(settings.nsteps, 2*settings.nsteps):
+\end{verbatim}
+The production phase records the system's trajectory and energy to new output files (\texttt{output\_production.txt} and \texttt{energy\_production.txt}).
+
+\subsection{File Output Format}
+Trajectory and energy data are saved as follows:
+\begin{itemize}
+	\item \texttt{output\_equilibration.txt} and \texttt{output\_production.txt} --- Contains the positions of all atoms in each time step.
+	\item \texttt{energy\_equilibration.txt} and \texttt{energy\_production.txt} --- Contains potential and kinetic energy data, recorded every 10 steps.
+\end{itemize}
+
+%\section{Conclusion}
+%This code performs a complete MD simulation in the microcanonical ensemble. The output files generated enable detailed analysis of the system’s evolution in terms of position and energy, allowing for validation and visualization of molecular dynamics.
+
+	
+\chapter{Simulation Initialization Parameters - \texttt{settings.py}}
+\label{chap:simulation_initialization}
+
+This module, through the \texttt{init()} function, sets up essential parameters and constants for molecular dynamics simulations. These parameters include physical constants, system dimensions, and particle properties, which collectively define the conditions under which simulations are performed.
+
+\section{Function: init}
+\label{sec:init_function}
+
+The \texttt{init()} function initializes global variables, sets up simulation parameters, and defines system-wide constants. %Each parameter is critical for defining particle behavior, spatial boundaries, and time progression within the simulation.
+
+%\begin{verbatim}
+%	def init():
+%\end{verbatim}
+
+\subsection*{Simulation Parameters and Constants}
+
+The following parameters are set globally within \texttt{init()} to define the initial conditions of the system:
+
+\begin{itemize}
+	\item \textbf{n}: Number of particles per axis dimension (default: 8).
+	\item \textbf{N}: Total number of particles, calculated as \(N = n^3\).
+	\item \textbf{nsteps}: Number of simulation time steps (default: 2000).
+	\item \textbf{mass}: Mass of Lennard-Jones (LJ) particles, set to \(105.5206 \times 10^{-27}\) kg.
+	\item \textbf{kb}: Boltzmann constant, with a value of \(1.3806503 \times 10^{-23} \, \text{m}^2 \, \text{kg} \, \text{s}^{-2} \, \text{K}^{-1}\).
+	\item \textbf{Tdesired}: Desired temperature of the simulation in Kelvin (default: 300 K).
+	\item \textbf{eps}: Energy parameter in the Lennard-Jones (LJ) potential, calculated as \(0.5 \times \texttt{kb} \times \texttt{Tdesired}\).
+	\item \textbf{sigma}: Distance parameter (in meters) for the LJ potential (default: \(2.55 \times 10^{-10}\) m).
+	\item \textbf{cutoff}: Cutoff distance for particle interactions, set to \(2.5 \times \texttt{sigma}\) (15 angstroms).
+	\item \textbf{deltat}: Time step for simulation, defaulting to \(1 \times 10^{-15}\) seconds.
+\end{itemize}
+
+\subsection*{Density and Volume Calculations}
+
+Additional parameters for density and spatial dimensions are computed:
+\begin{itemize}
+	\item \textbf{faktor\_rho}: Density scaling factor, set to 0.5.
+	\item \textbf{rho}: Particle density in m\(^{-3}\), calculated as:
+	\[
+	\rho = \frac{\texttt{faktor\_rho}}{\texttt{sigma}^3}
+	\]
+	\item \textbf{p\_L}: Dimensionless parameter for box scaling, calculated as:
+	\[
+	\texttt{p\_L} = \frac{n}{\texttt{sigma} \times \rho^{1/3}}
+	\]
+	\item \textbf{Vol}: Volume of the simulation box in cubic meters, calculated as:
+	\[
+	\texttt{Vol} = \frac{N}{\rho}
+	\]
+	\item \textbf{L}: Physical length of each side of the simulation box, computed as:
+	\[
+	\texttt{L} = \texttt{p\_L} \times \texttt{sigma}
+	\]
+	\item \textbf{a\_lat}: Lattice constant for particles in meters, calculated as:
+	\[
+	\texttt{a\_lat} = \frac{\texttt{L}}{n}
+	\]
+\end{itemize}
+
+\section{Class: box}
+\label{sec:class_box}
+
+The \texttt{box} class defines the spatial boundaries of the simulation in each dimension. The box dimensions are initialized in angstroms and are critical for defining particle positions.
+
+\begin{verbatim}
+	class box:
+	def __init__(self, xlo, xhi, ylo, yhi, zlo, zhi, lx, ly, lz):
+	self.xlo = xlo
+	self.xhi = xhi
+	self.ylo = ylo
+	self.yhi = yhi
+	self.zlo = zlo
+	self.zhi = zhi
+\end{verbatim}
+
+\subsection*{Boundary Parameters}
+
+\begin{itemize}
+	\item \textbf{xlo, ylo, zlo}: Lower bounds for x, y, and z coordinates (set to 0).
+	\item \textbf{xhi, yhi, zhi}: Upper bounds for each coordinate axis, initialized to \texttt{L}.
+	\item \textbf{lx, ly, lz}: Box dimensions along each axis, calculated as \texttt{xhi - xlo}, \texttt{yhi - ylo}, and \texttt{zhi - zlo}, respectively.
+\end{itemize}
+
+\section{Class: Energy}
+\label{sec:class_energy}
+
+The \texttt{Energy} class tracks the system's potential and kinetic energy components.
+
+\begin{verbatim}
+	class Energy:
+	def __init__(self, ep, ek, ekx, eky, ekz):
+	self.ep = ep
+	self.ek = ek
+	self.ekx = ekx
+	self.eky = eky
+	self.ekz = ekz
+\end{verbatim}
+
+\subsection*{Energy Components}
+
+\begin{itemize}
+	\item \textbf{ep}: Potential energy of the system.
+	\item \textbf{ek}: Total kinetic energy.
+	\item \textbf{ekx, eky, ekz}: Kinetic energy components along each axis.
+\end{itemize}
+
+\section{Additional Settings and Arrays}
+\label{sec:additional_settings}
+
+\begin{itemize}
+	\item \textbf{debug}: A flag for enabling debugging mode, where \texttt{1} enables debugging and \texttt{0} disables it.
+	\item \textbf{Trescale}: Determines if velocity rescaling to maintain target temperature is performed every \(x\)th step (\texttt{1} enables rescaling, \texttt{0} disables).
+\end{itemize}
+
+\subsection*{Arrays for Particle Position and Velocity}
+
+To enable vectorized operations, arrays are created for particle coordinates and velocity components:
+
+\begin{verbatim}
+	xi, yi, zi = np.zeros(shape=N)
+	vix, viy, viz = np.zeros(shape=N)
+	sumfix, sumfiy, sumfiz = np.zeros(shape=N)
+\end{verbatim}
+
+\begin{itemize}
+	\item \textbf{xi, yi, zi}: Arrays for storing x, y, and z positions of each particle.
+	\item \textbf{vix, viy, viz}: Arrays for storing x, y, and z velocity components.
+	\item \textbf{sumfix, sumfiy, sumfiz}: Arrays to accumulate forces on particles along each axis.
+\end{itemize}
+
+%\section{Conclusion}
+%The \texttt{init()} function in this module establishes the initial conditions for a molecular dynamics simulation, setting critical parameters, initializing spatial boundaries, and preparing arrays for vectorized computations. This setup supports the efficient simulation of atomic behavior under specified conditions.
+
+
+\chapter{Atom Initialization and Velocity Rescaling - \texttt{initialize.py}}
+\label{chap:atom_initialization}
+
+This module is responsible for initializing atomic particles in a simulation box, setting their positions and velocities, and rescaling their velocities to achieve a desired temperature. The code leverages predefined settings and functions, including custom modules such as \texttt{settings} and \texttt{debug}, and relies on numpy for numerical operations.
+
+\section{Function: InitializeAtoms}
+\label{sec:initialize_atoms}
+
+The \texttt{InitializeAtoms} function initializes the atomic positions and velocities within a three-dimensional simulation box, ensuring proper distribution and compliance with physical conditions such as temperature and momentum conservation.
+
+\begin{verbatim}
+	def InitializeAtoms():
+\end{verbatim}
+
+\subsection*{Steps in \texttt{InitializeAtoms}}
+
+\subsubsection*{1. Print Simulation Box Boundaries}
+The function begins by printing the boundary dimensions of the simulation box along the x-axis. These values are retrieved from the \texttt{settings.box} object:
+
+\begin{lstlisting}[breaklines]
+	Long user text
+\end{lstlisting}
+
+\begin{verbatim}
+	print("xlo = %e Angstrom and yhi = %e Angstrom" %  (settings.box.xlo, settings.box.xhi))
+\end{verbatim}
+
+\subsubsection*{2. Atom Position Initialization}
+The nested while loops iterate over the \texttt{nx}, \texttt{ny}, and \texttt{nz} coordinates up to the value specified by \texttt{settings.n}, representing the number of particles along each axis. For each atom:
+
+\begin{itemize}
+	\item \texttt{x}, \texttt{y}, \texttt{z} coordinates are calculated by multiplying the lattice constant \texttt{a\_lat} with \texttt{nx}, \texttt{ny}, and \texttt{nz}.
+	\item \texttt{vx}, \texttt{vy}, \texttt{vz} velocities are initialized randomly in the range \([-0.5, 0.5]\) to provide an initial velocity distribution.
+	\item Each particle’s position and velocity are stored in arrays \texttt{xi}, \texttt{yi}, \texttt{zi}, \texttt{vix}, \texttt{viy}, and \texttt{viz}.
+\end{itemize}
+
+\subsubsection*{3. Update Total Particle Count}
+The variable \texttt{n} maintains the total number of particles, updating \texttt{settings.nparticles} with the final count after initialization.
+
+\subsubsection*{4. Optional Debugging Output}
+If \texttt{settings.debug} is enabled, the initial atomic positions and velocities are written to an external file via \texttt{debug.WriteAtoms}:
+\begin{verbatim}
+	if settings.debug == 1:
+	debug.WriteAtoms(0)
+\end{verbatim}
+
+\subsubsection*{5. Linear Momentum Cancellation}
+To ensure zero net momentum, the total velocities along each axis are calculated using \texttt{numpy.sum}. These totals are subtracted from each particle’s velocity to cancel any unintended momentum in the system.
+
+\subsubsection*{6. Velocity Rescaling to Achieve Desired Temperature}
+The initial temperature of the system is calculated by the \texttt{temperature} function. The velocities are then rescaled by calling \texttt{rescalevelocity}, which adjusts each component of the velocity based on the desired and current temperature ratio.
+
+\subsection{Print Temperature and Linear Momentum}
+Finally, the linear momentum and temperature are printed to verify correct initialization and rescaling:
+\begin{verbatim}
+	print("========== linear momentum ", svx)
+	print("temperature == ", Trandom)
+\end{verbatim}
+
+\section{Function: temperature}
+\label{sec:temperature}
+
+The \texttt{temperature} function calculates the instantaneous temperature of the atomic system based on the mean square velocity of the particles.
+
+\begin{verbatim}
+	def temperature():
+\end{verbatim}
+
+\subsubsection*{Computation Details}
+The total kinetic energy is computed as:
+\begin{verbatim}
+	vsq = np.sum(np.multiply(settings.vix, settings.vix) + 
+	np.multiply(settings.viy, settings.viy) + 
+	np.multiply(settings.viz, settings.viz))
+\end{verbatim}
+This is converted to temperature using the mass of particles (\texttt{settings.mass}), the Boltzmann constant (\texttt{settings.kb}), and the number of particles. The formula applied is:
+\[
+T = \frac{\texttt{settings.mass} \times \texttt{vsq}}{3 \times \texttt{settings.kb} \times \texttt{settings.nparticles}}
+\]
+
+\section{Function: rescalevelocity}
+\label{sec:rescale_velocity}
+
+The \texttt{rescalevelocity} function adjusts each velocity component to match a target temperature \texttt{T1}, rescaling from the current temperature \texttt{T2}.
+
+\begin{verbatim}
+	def rescalevelocity(T1, T2):
+\end{verbatim}
+
+\subsection*{Rescaling Factor}
+The velocity scaling factor is derived from the ratio of the target temperature to the current temperature:
+\[
+\texttt{scale\_factor} = \sqrt{\frac{\texttt{T1}}{\texttt{T2}}}
+\]
+Each velocity component (\texttt{vix}, \texttt{viy}, \texttt{viz}) is multiplied by this factor to achieve the target temperature:
+\begin{verbatim}
+	settings.vix = settings.vix * math.sqrt(T1 / T2)
+	settings.viy = settings.viy * math.sqrt(T1 / T2)
+	settings.viz = settings.viz * math.sqrt(T1 / T2)
+\end{verbatim}
+
+\section{Conclusion}
+This module initializes a particle system within a cubic simulation box, with randomized velocities rescaled to achieve a target temperature. The \texttt{InitializeAtoms} function ensures proper setup, while the \texttt{temperature} and \texttt{rescalevelocity} functions handle temperature calculation and control. This framework provides a basis for molecular dynamics simulations by ensuring appropriate initial conditions.
+
+
+\chapter{Force Computation and Periodic Boundary Conditions}
+\label{chap:force_computation}
+
+This chapter provides a detailed description of the Lennard-Jones force calculation on particles within a periodic simulation box. The forces are calculated using vectorized operations for computational efficiency, with periodic boundary conditions applied to accurately represent interactions across boundaries.
+
+\section{Function: \texttt{forceLJvec}}
+\label{sec:forceLJvec}
+
+The \texttt{forceLJvec()} function calculates the Lennard-Jones (LJ) forces between particles in a simulation box. This vectorized approach is used to compute forces on each particle by considering all particle-pair interactions, adjusted for the minimum image convention under periodic boundary conditions.
+
+\begin{verbatim}
+	def forceLJvec():
+\end{verbatim}
+
+\subsection*{Procedure Overview}
+\begin{enumerate}
+	\item \textbf{Position Matrix Creation:} Constructs matrices for particle positions along each Cartesian coordinate (x, y, z) to facilitate distance calculations between all particle pairs.
+	\item \textbf{Periodic Boundary Condition Adjustment:} Adjusts particle distances along each coordinate based on the minimum image convention, ensuring particles interact with their nearest images.
+	\item \textbf{Distance Calculation:} Computes the square of the total distance between particles.
+	\item \textbf{Force and Potential Calculation:} Using the Lennard-Jones potential, calculates the force and potential energy between each particle pair.
+	\item \textbf{Force Summation:} Aggregates the forces to determine the total force acting on each particle in the x, y, and z directions.
+\end{enumerate}
+
+\subsection*{Detailed Calculation Steps}
+
+\paragraph{1. Position Matrix Creation}
+The position matrices for each Cartesian coordinate are created by replicating the position vectors (e.g., \texttt{settings.xi}) across rows, then transposing them. This allows calculation of all pairwise distances in each coordinate.
+
+\begin{verbatim}
+	xi = np.transpose(np.multiply(np.ones((settings.ntot, settings.ntot)), settings.xi))
+\end{verbatim}
+
+\paragraph{2. Distance Calculation with Periodic Boundary Condition (PBC) Adjustment}
+The relative distance between particles is computed and then adjusted for periodic boundaries, ensuring particles interact with their closest periodic image:
+\[
+x_{ij\text{pbc}} = x_{ij} - \text{sign}(x_{ij}) \times \texttt{settings.box.lx}
+\]
+
+The adjusted matrices (\texttt{xijpbc}, \texttt{yijpbc}, \texttt{zijpbc}) reflect the minimum image convention for each coordinate.
+
+\paragraph{3. Total Distance and Inverse Distance Calculation}
+The square of the total distance \(R^2\) between particle pairs is calculated as:
+\[
+R^2 = x_{ij\text{pbc}}^2 + y_{ij\text{pbc}}^2 + z_{ij\text{pbc}}^2
+\]
+To avoid division by zero in force calculations, the diagonal of \(R^2\) is set to a large constant.
+
+\paragraph{4. Lennard-Jones Potential and Force Calculation}
+Using the inverse sixth and twelfth powers of the reduced distance, the Lennard-Jones potential and force are computed:
+\[
+f_{\text{force}} = 48 \times \texttt{settings.eps} \times \left(\frac{\sigma^6}{R^{12}} - 0.5 \frac{\sigma^6}{R^6}\right) \times \frac{1}{R^2}
+\]
+Values are zeroed beyond the cutoff radius to avoid unphysical interactions.
+
+\paragraph{5. Force Aggregation}
+Forces in each Cartesian direction are calculated as:
+\[
+f_{ijx} = -f_{\text{force}} \times x_{ij\text{pbc}}
+\]
+The total force on each particle is obtained by summing the contributions from all interacting particles.
+
+\section{Function: \texttt{pbc}}
+\label{sec:pbc_function}
+
+The \texttt{pbc()} function computes the shortest distance between two particles \(i\) and \(j\) in a given dimension \(k\) (x, y, or z) using the minimum image convention.
+
+\begin{verbatim}
+	def pbc(i, j, k):
+\end{verbatim}
+
+\subsection*{Parameters}
+\begin{itemize}
+	\item \texttt{i}, \texttt{j}: Indices of the two particles for which the distance is calculated.
+	\item \texttt{k}: Dimension identifier (1 for x, 2 for y, 3 for z).
+\end{itemize}
+
+\subsection*{Distance Calculation}
+The function calculates the difference \(r_{ij}\) in coordinate \(k\), adjusts for periodic boundary conditions by wrapping positions modulo box length, and ensures the shortest distance is used:
+\[
+r_{ij} = r_j - r_i
+\]
+If \(r_{ij}\) exceeds half the box length, it is adjusted to reflect the periodic boundary:
+\[
+r_{ij} = r_{ij} - \text{sign}(r_{ij}) \times l
+\]
+where \(l\) is the box length in dimension \(k\).
+
+\section{Conclusion}
+The functions \texttt{forceLJvec()} and \texttt{pbc()} handle the force calculations and boundary adjustments for molecular dynamics simulations. Together, they ensure accurate interparticle forces while maintaining realistic boundary interactions.
+
+\chapter{Time Integration and Kinetic Energy Calculation}
+\label{chap:integration_energy}
+
+This chapter provides documentation for the time integration and kinetic energy calculation functions in a molecular dynamics simulation using the Lennard-Jones potential. These functions employ the Velocity Verlet algorithm for updating particle positions and velocities over discrete time steps, ensuring stable and accurate integration of equations of motion.
+
+\section{Function: \texttt{VelocityVerletVec}}
+\label{sec:velocityverletvec}
+
+The \texttt{VelocityVerletVec()} function advances the position and velocity of each particle in time according to the Velocity Verlet algorithm. This algorithm is a commonly used integration scheme for molecular dynamics due to its time-reversibility and conservation of energy properties.
+
+\begin{verbatim}
+	def VelocityVerletVec():
+\end{verbatim}
+
+\subsection*{Procedure Overview}
+The function follows three main steps in each time step \( t \to t + \Delta t \):
+\begin{enumerate}
+	\item \textbf{Position Update:} Updates the positions of particles using current velocities and forces.
+	\item \textbf{Force Recalculation:} Computes the new forces on each particle at the updated positions.
+	\item \textbf{Velocity Update:} Updates the velocities of particles using the average of old and new forces.
+\end{enumerate}
+
+\subsection*{Detailed Calculation Steps}
+
+\paragraph{1. Position Update}
+The new position \(\vec{r}_i(t + \Delta t)\) of each particle \(i\) is calculated using:
+\[
+\vec{r}_i(t + \Delta t) = \vec{r}_i(t) + \vec{v}_i(t) \Delta t + \frac{1}{2} \frac{\vec{F}_i(t)}{m} \Delta t^2
+\]
+where \(\vec{F}_i(t)\) represents the force on particle \(i\) at time \(t\), and \(m\) is the particle mass.
+
+\begin{verbatim}
+	settings.xi += settings.vix * settings.deltat + settings.sumfix * settings.deltat * settings.deltat * 0.5 / settings.mass
+\end{verbatim}
+
+\paragraph{2. Force Recalculation}
+The forces are updated based on the new positions using the Lennard-Jones force calculation in the \texttt{force.forceLJvec()} function. The previous forces are stored for use in the subsequent velocity update.
+
+\begin{verbatim}
+	sumfixati = settings.sumfix
+\end{verbatim}
+
+\paragraph{3. Velocity Update}
+Velocities are updated using the average of the forces at \(t\) and \(t + \Delta t\):
+\[
+\vec{v}_i(t + \Delta t) = \vec{v}_i(t) + \frac{1}{2} \frac{\Delta t}{m} \left( \vec{F}_i(t) + \vec{F}_i(t + \Delta t) \right)
+\]
+This ensures that the velocity changes smoothly and accurately in response to changing forces.
+
+\begin{verbatim}
+	settings.vix += 0.5 * settings.deltat * (settings.sumfix + sumfixati) / settings.mass
+\end{verbatim}
+
+\section{Function: \texttt{KineticEnergyVec}}
+\label{sec:kineticenergyvec}
+
+The \texttt{KineticEnergyVec()} function calculates the kinetic energy of the system along each Cartesian coordinate and the total kinetic energy, which is essential for monitoring the temperature and energy conservation during the simulation.
+
+\begin{verbatim}
+	def KineticEnergyVec():
+\end{verbatim}
+
+\subsection*{Kinetic Energy Calculation}
+For each particle, the kinetic energy \(E_k\) is computed using:
+\[
+E_k = \frac{1}{2} m \left( v_{x}^2 + v_{y}^2 + v_{z}^2 \right)
+\]
+The kinetic energy is decomposed along each coordinate axis (x, y, z) to facilitate analysis.
+
+\begin{verbatim}
+	settings.Energy.ekx = 0.5 * mass * np.sum(np.multiply(settings.vix, settings.vix))
+\end{verbatim}
+
+The total kinetic energy is the sum of kinetic energies along all coordinates:
+\[
+E_k = E_{kx} + E_{ky} + E_{kz}
+\]
+This total kinetic energy is a key measure in molecular dynamics, as it relates to the temperature of the system via the equipartition theorem.
+
+\section{Conclusion}
+The \texttt{VelocityVerletVec} function provides efficient time integration for particle motion, while \texttt{KineticEnergyVec} calculates the kinetic energy of the system. Together, they form a fundamental part of the simulation's time evolution and energy diagnostics.
+
+\chapter{Output Functions for Atomic Data}
+\label{chap:output}
+
+This chapter documents the functions used to write atomic trajectory, velocity, and force data for each simulation step. These functions generate output files in a structured format that facilitates post-simulation analysis, visualization, and diagnostics.
+
+\section{Function: \texttt{WriteAtoms}}
+\label{sec:writeatoms}
+
+The \texttt{WriteAtoms()} function records the current positions of each particle to a file named \texttt{atoms\_trajectory.txt}. Each entry in the file represents a snapshot of the system at a specific simulation step, including the number of particles, simulation box dimensions, and particle positions.
+
+\begin{verbatim}
+	def WriteAtoms(step):
+\end{verbatim}
+
+\subsection*{Parameters}
+\begin{itemize}
+	\item \texttt{step} --- The current time step in the simulation.
+\end{itemize}
+
+\subsection*{Output Format}
+Each call to \texttt{WriteAtoms} appends a structured block to \texttt{atoms\_trajectory.txt}:
+\begin{enumerate}
+	\item \texttt{ITEM: TIMESTEP} --- Specifies the current timestep.
+	\item \texttt{ITEM: NUMBER OF ATOMS} --- Specifies the number of particles in the system.
+	\item \texttt{ITEM: BOX BOUNDS pp pp pp} --- The simulation box boundaries in each dimension, converted to angstroms.
+	\item \texttt{ITEM: ATOMS id x y z} --- The particle ID and its x, y, and z positions, in angstroms.
+\end{enumerate}
+
+\subsection*{Example Output}
+\begin{verbatim}
+	ITEM: TIMESTEP 
+	100 
+	ITEM: NUMBER OF ATOMS 
+	64 
+	ITEM: BOX BOUNDS pp pp pp 
+	0.000000e+00 3.500000e+01 
+	0.000000e+00 3.500000e+01 
+	0.000000e+00 3.500000e+01 
+	ITEM: ATOMS id x y z 
+	1 1.234567e+01 2.345678e+01 3.456789e+01 
+\end{verbatim}
+
+\section{Function: \texttt{WriteVelocity}}
+\label{sec:writevelocity}
+
+The \texttt{WriteVelocity()} function writes particle velocities to a file named \texttt{atoms\_velocity.txt}. This file captures the instantaneous velocities of each particle at each time step, which are essential for computing kinetic energy and analyzing particle dynamics.
+
+\begin{verbatim}
+	def WriteVelocity(step):
+\end{verbatim}
+
+\subsection*{Parameters}
+\begin{itemize}
+	\item \texttt{step} --- The current time step in the simulation.
+\end{itemize}
+
+\subsection*{Output Format}
+Each time step is structured as follows:
+\begin{enumerate}
+	\item \texttt{ITEM: TIMESTEP} --- Current time step.
+	\item \texttt{ITEM: NUMBER OF ATOMS} --- Number of particles.
+	\item \texttt{ITEM: BOX BOUNDS pp pp pp} --- Simulation box dimensions.
+	\item \texttt{ITEM: ATOMS id x y z vx vy vz} --- Particle ID, positions, and velocities along each Cartesian coordinate.
+\end{enumerate}
+
+\subsection*{Example Output}
+\begin{verbatim}
+	ITEM: TIMESTEP 
+	100 
+	ITEM: NUMBER OF ATOMS 
+	64 
+	ITEM: BOX BOUNDS pp pp pp 
+	0.000000e+00 3.500000e+01 
+	0.000000e+00 3.500000e+01 
+	0.000000e+00 3.500000e+01 
+	ITEM: ATOMS id x y z vx vy vz 
+	1 1.234567e+01 2.345678e+01 3.456789e+01 -0.123456 0.234567 0.345678 
+\end{verbatim}
+
+\section{Function: \texttt{WriteForces}}
+\label{sec:writeforces}
+
+The \texttt{WriteForces()} function saves the forces acting on each particle to a file named \texttt{atoms\_forces.txt}. Recording forces is valuable for analyzing particle interactions and the response of particles to potential energy fields.
+
+\begin{verbatim}
+	def WriteForces(step):
+\end{verbatim}
+
+\subsection*{Parameters}
+\begin{itemize}
+	\item \texttt{step} --- The current time step in the simulation.
+\end{itemize}
+
+\subsection*{Output Format}
+For each time step, the output includes:
+\begin{enumerate}
+	\item \texttt{ITEM: TIMESTEP} --- Current simulation time step.
+	\item \texttt{ITEM: NUMBER OF ATOMS} --- Total number of particles.
+	\item \texttt{ITEM: BOX BOUNDS pp pp pp} --- Simulation box dimensions.
+	\item \texttt{ITEM: ATOMS id x y z fx fy fz} --- Particle ID, positions, and force components in each coordinate direction.
+\end{enumerate}
+
+\subsection*{Example Output}
+\begin{verbatim}
+	ITEM: TIMESTEP 
+	100 
+	ITEM: NUMBER OF ATOMS 
+	64 
+	ITEM: BOX BOUNDS pp pp pp 
+	0.000000e+00 3.500000e+01 
+	0.000000e+00 3.500000e+01 
+	0.000000e+00 3.500000e+01 
+	ITEM: ATOMS id x y z fx fy fz 
+	1 1.234567e+01 2.345678e+01 3.456789e+01 0.123456 -0.234567 0.345678 
+\end{verbatim}
+
+\section{Conclusion}
+The output functions \texttt{WriteAtoms}, \texttt{WriteVelocity}, and \texttt{WriteForces} provide a comprehensive record of particle positions, velocities, and forces, supporting detailed post-simulation analysis and ensuring the data is saved in a format compatible with visualization and analysis tools.
+
+
+\chapter{Energy and Trajectory Output Functions}
+\label{chap:energy_trajectory_output}
+
+This chapter documents the functions responsible for writing energy and trajectory data to output files. These functions record information about the system’s potential and kinetic energy as well as particle positions at each time step, supporting detailed analysis of the simulation over time.
+
+\section{Function: \texttt{WriteEnergy}}
+\label{sec:writeenergy}
+
+The \texttt{WriteEnergy()} function records the current energy of the system to a specified output file. This includes potential energy, total kinetic energy, and the kinetic energy components along the Cartesian axes.
+
+\begin{verbatim}
+	def WriteEnergy(fileenergy, itime):
+\end{verbatim}
+
+\subsection*{Parameters}
+\begin{itemize}
+	\item \texttt{fileenergy} --- A file object for recording energy data.
+	\item \texttt{itime} --- The current time step in the simulation.
+\end{itemize}
+
+\subsection*{Output Format}
+Each call to \texttt{WriteEnergy} writes a single line in the \texttt{fileenergy} file with the following structure:
+\begin{verbatim}
+	itime ep ek ekx eky ekz
+\end{verbatim}
+where:
+\begin{itemize}
+	\item \texttt{itime} --- Current time step.
+	\item \texttt{ep} --- Potential energy of the system.
+	\item \texttt{ek} --- Total kinetic energy.
+	\item \texttt{ekx, eky, ekz} --- Kinetic energy components along the x, y, and z axes.
+\end{itemize}
+
+\subsection*{Example Output}
+\begin{verbatim}
+	100 1.234567e+02 5.678901e+01 1.234567e+01 2.345678e+01 3.456789e+01
+\end{verbatim}
+
+This structure provides energy data that can be used to assess energy conservation and stability in the simulation.
+
+\section{Function: \texttt{WriteTrajectory}}
+\label{sec:writetrajectory}
+
+The \texttt{WriteTrajectory()} function writes the particle positions for each simulation step to an output file. It organizes the information in a format compatible with visualization tools and includes essential simulation metadata.
+
+\begin{verbatim}
+	def WriteTrajectory(fileoutput, itime):
+\end{verbatim}
+
+\subsection*{Parameters}
+\begin{itemize}
+	\item \texttt{fileoutput} --- A file object for recording trajectory data.
+	\item \texttt{itime} --- The current time step in the simulation.
+\end{itemize}
+
+\subsection*{Output Format}
+Each time step in the \texttt{fileoutput} file is structured as follows:
+\begin{enumerate}
+	\item \texttt{ITEM: TIMESTEP} --- Indicates the current time step.
+	\item \texttt{ITEM: NUMBER OF ATOMS} --- Number of particles in the simulation.
+	\item \texttt{ITEM: BOX BOUNDS} --- Simulation box boundaries in each dimension, converted to angstroms.
+	\item \texttt{ITEM: ATOMS id type x y z} --- Particle ID, type (in this case, identical to ID), and the x, y, and z positions (in angstroms).
+\end{enumerate}
+
+\subsection*{Periodic Boundary Conditions}
+The \texttt{WriteTrajectory} function applies periodic boundary conditions to the positions of each particle by calculating coordinates modulo the box size in each dimension. This ensures that particles remain within the defined simulation boundaries.
+
+\subsection*{Example Output}
+\begin{verbatim}
+	ITEM: TIMESTEP 
+	100 
+	ITEM: NUMBER OF ATOMS 
+	64 
+	ITEM: BOX BOUNDS 
+	0.000000e+00 3.500000e+01 xlo xhi 
+	0.000000e+00 3.500000e+01 ylo yhi 
+	0.000000e+00 3.500000e+01 zlo zhi 
+	ITEM: ATOMS id type x y z 
+	1 1 1.234567e+01 2.345678e+01 3.456789e+01 
+\end{verbatim}
+
+\section{Conclusion}
+The \texttt{WriteEnergy} and \texttt{WriteTrajectory} functions provide essential output data for analyzing the dynamics of the simulated system. The energy output can be used for verifying the conservation of energy, while the trajectory data enables visualization and tracking of particle movement across time steps.
+
+
+
+\end{document}
